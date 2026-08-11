@@ -1,0 +1,14 @@
+{
+  "name": "rescuenet",
+  "version": "1.0.0",
+  "description": "RescueNet - Real-Time Disaster Relief Coordinator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.3.1"
+  }
+}

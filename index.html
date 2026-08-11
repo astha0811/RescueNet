@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RescueNet - Disaster Relief Platform</title>
+  
+  <!-- Leaflet CSS for Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    body { display: flex; flex-direction: column; height: 100vh; }
+    header { background: #d9534f; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .container { display: flex; flex: 1; height: calc(100vh - 60px); }
+    #sidebar { width: 350px; padding: 20px; background: #f8f9fa; border-right: 1px solid #ddd; overflow-y: auto; }
+    #map { flex: 1; height: 100%; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; font-weight: bold; margin-bottom: 5px; }
+    input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .checkbox-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    .checkbox-group label { font-weight: normal; }
+    button { width: 100%; padding: 12px; background: #d9534f; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    button:hover { background: #c9302c; }
+    .mode-btn { background: #0275d8; margin-top: 10px; }
+    .mode-btn:hover { background: #025aa5; }
+    .info-box { background: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 15px; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🚨 RescueNet</h1>
+    <span id="status-badge">Mode: Victim SOS Portal</span>
+  </header>
+
+  <div class="container">
+    <div id="sidebar">
+      <h2>Send Emergency SOS</h2>
+      <p style="font-size: 13px; color: #666; margin-bottom: 15px;">Click anywhere on the map to set your location pin.</p>
+      
+      <form id="sosForm">
+        <div class="form-group">
+          <label>Your Name</label>
+          <input type="text" id="name" placeholder="John Doe">
+        </div>
+
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="text" id="phone" placeholder="9876543210">
+        </div>
+
+        <div class="form-group">
+          <label>Required Supplies</label>
+          <div class="checkbox-group">
+            <label><input type="checkbox" name="needs" value="WATER" checked> Water</label>
+            <label><input type="checkbox" name="needs" value="FOOD" checked> Food</label>
+            <label><input type="checkbox" name="needs" value="MEDICAL"> Medical</label>
+            <label><input type="checkbox" name="needs" value="SHELTER"> Shelter</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Selected Location (Lat, Lng)</label>
+          <input type="text" id="coords" readonly placeholder="Click map to select location">
+        </div>
+
+        <button type="submit">SUBMIT SOS SIGNAL</button>
+      </form>
+
+      <button class="mode-btn" onclick="toggleNGOView()">Switch to NGO Cluster Map View</button>
+
+      <div class="info-box" id="summaryBox">
+        <strong>Map Legend:</strong><br>
+        📍 Blue Marker = Single SOS Pin<br>
+        🔴 Red Circle = High Density Cluster (&ge; 5 victims)<br>
+        🟡 Yellow Circle = Medium Density Cluster
+      </div>
+    </div>
+
+    <div id="map"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Default Map Centered (e.g., Mumbai/Delhi area)
+    let map = L.map('map').setView([19.0760, 72.8777], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    let selectedMarker = null;
+    let selectedCoords = null;
+    let isNGOView = false;
+    let clusterLayerGroup = L.layerGroup().addTo(map);
+
+    // Map Click to Pick SOS Location
+    map.on('click', function(e) {
+      if (isNGOView) return;
+      selectedCoords = e.latlng;
+      document.getElementById('coords').value = `${selectedCoords.lat.toFixed(4)}, ${selectedCoords.lng.toFixed(4)}`;
+
+      if (selectedMarker) map.removeLayer(selectedMarker);
+      selectedMarker = L.marker(selectedCoords).addTo(map).bindPopup("Your SOS Location").openPopup();
+    });
+
+    // Form Submission
+    document.getElementById('sosForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!selectedCoords) return alert("Please click on the map to set your location first!");
+
+      const needs = Array.from(document.querySelectorAll('input[name="needs"]:checked')).map(cb => cb.value);
+
+      const payload = {
+        name: document.getElementById('name').value,
+        phone: document.getElementById('phone').value,
+        needs: needs,
+        latitude: selectedCoords.lat,
+        longitude: selectedCoords.lng
+      };
+
+      const res = await fetch('/api/sos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert("🚨 SOS Signal Broadcasted Successfully!");
+        document.getElementById('sosForm').reset();
+        if (selectedMarker) map.removeLayer(selectedMarker);
+      }
+    });
+
+    // NGO Cluster Mode Switch
+    async function toggleNGOView() {
+      isNGOView = !isNGOView;
+      const statusBadge = document.getElementById('status-badge');
+
+      if (isNGOView) {
+        statusBadge.innerText = "Mode: NGO Volunteer Cluster Dashboard";
+        statusBadge.style.background = "#5cb85c";
+        loadClusters();
+      } else {
+        statusBadge.innerText = "Mode: Victim SOS Portal";
+        statusBadge.style.background = "";
+        clusterLayerGroup.clearLayers();
+      }
+    }
+
+    // Load Spatial Clusters from Backend
+    async function loadClusters() {
+      clusterLayerGroup.clearLayers();
+      const res = await fetch('/api/sos/clusters');
+      const clusters = await res.json();
+
+      clusters.forEach(c => {
+        const color = c.urgency === 'HIGH' ? 'red' : 'gold';
+        const circle = L.circle(c.centroid, {
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.5,
+          radius: 1000 // 1km cluster visual radius
+        }).addTo(clusterLayerGroup);
+
+        const summaryText = Object.entries(c.demandSummary).map(([k,v]) => `<b>${k}:</b> ${v}`).join('<br>');
+        circle.bindPopup(`
+          <b>🚨 Cluster Priority: ${c.urgency}</b><br>
+          <b>Total Victims:</b> ${c.totalVictims}<br><br>
+          <b>Aggregated Demand:</b><br>${summaryText}
+        `);
+      });
+    }
+  </script>
+</body>
+</html>
