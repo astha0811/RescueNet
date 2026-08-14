@@ -1,7 +1,7 @@
 require('dns').setServers(['1.1.1.1', '8.8.8.8']);
 const mongoose = require('mongoose');
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://astha12:Pickachu12@cluster0.weatwyz.mongodb.net/rescuenet?retryWrites=true&w=majority';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://astha12:*********@cluster0.weatwyz.mongodb.net/rescuenet?retryWrites=true&w=majority';
 
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB (RescueNet)'))
